@@ -42,7 +42,7 @@
   - Refuse unsupported performance and hidden-metric claims.
   - _Requirements: R6, R9_
 
-- [ ] 9. Implement the local research UI
+- [x] 9. Implement the local research UI
   - Follow the approved UX specification before writing interface code.
   - Build intake/progress and the three-pane single-post project page.
   - Add transcript-frame evidence inspection and finding review.

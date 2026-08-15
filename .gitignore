@@ -24,4 +24,5 @@ task-space*.json
 *.har
 *.trace.zip
 *.log
+*.tsbuildinfo
 .DS_Store

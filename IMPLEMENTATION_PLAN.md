@@ -17,11 +17,11 @@
 **Goal**: Implement the approved industrial/utilitarian three-pane single-post research UI with contextual evidence inspection and finding review.
 **Success Criteria**: Intake reaches a persistent project page; findings expose scope and all evidence relations; review creates history; responsive layout has no horizontal overflow.
 **Tests**: UI component/browser checks, accessibility, review API integration, production build.
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 4: Real validation and release handoff
 
 **Goal**: Run opt-in read-only ego-browser validation with profile `hhh-01`, document only redacted coverage, complete quality gates, push, and open a draft PR.
 **Success Criteria**: Authorized post is validated or a hard-stop handoff is issued; no real artifacts leak into Git; typecheck/test/build pass; branch is pushed and draft PR describes covered and uncovered boundaries.
 **Tests**: Real smoke validation, secret/artifact scan, full workspace quality gates.
-**Status**: Not Started
+**Status**: In Progress
