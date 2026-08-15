@@ -261,6 +261,7 @@ export const collectedPostSchema = z.object({
 });
 
 export type ContentItem = z.infer<typeof contentItemSchema>;
+export type Creator = z.infer<typeof creatorSchema>;
 export type MetricSnapshot = z.infer<typeof metricSnapshotSchema>;
 export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
 export type ResearchProject = z.infer<typeof researchProjectSchema>;

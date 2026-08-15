@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import {
   analysisRunSchema,
   contentItemSchema,
+  creatorSchema,
   evidenceItemSchema,
   findingRevisionSchema,
   findingSchema,
@@ -10,6 +11,7 @@ import {
   researchProjectSchema,
   type AnalysisRun,
   type ContentItem,
+  type Creator,
   type EvidenceItem,
   type Finding,
   type FindingRevision,
@@ -76,6 +78,35 @@ export class SignalRoomDatabase {
     return this.getContentByExternalId(value.externalId)!;
   }
 
+  upsertCreator(creator: Creator): Creator {
+    const value = creatorSchema.parse(creator);
+    this.db
+      .prepare(
+        `
+        INSERT INTO creators VALUES (
+          @id, @platform, @externalId, @handle, @name, @profileUrl,
+          @firstSeenAt, @lastCollectedAt
+        ) ON CONFLICT(platform, external_id) DO UPDATE SET
+          handle=excluded.handle, name=excluded.name, profile_url=excluded.profile_url,
+          last_collected_at=excluded.last_collected_at
+      `,
+      )
+      .run(value);
+    const row = this.db
+      .prepare('SELECT * FROM creators WHERE platform=? AND external_id=?')
+      .get(value.platform, value.externalId) as Record<string, unknown>;
+    return creatorSchema.parse({
+      id: row.id,
+      platform: row.platform,
+      externalId: row.external_id,
+      handle: row.handle,
+      name: row.name,
+      profileUrl: row.profile_url,
+      firstSeenAt: row.first_seen_at,
+      lastCollectedAt: row.last_collected_at,
+    });
+  }
+
   getContentByExternalId(externalId: string): ContentItem | null {
     const row = this.db
       .prepare('SELECT * FROM content_items WHERE platform=? AND external_id=?')
@@ -94,6 +125,100 @@ export class SignalRoomDatabase {
       publishedAt: row.published_at,
       firstSeenAt: row.first_seen_at,
       latestSourceArtifactRef: row.latest_source_artifact_ref,
+    });
+  }
+
+  getContent(id: string): ContentItem | null {
+    const external = this.db
+      .prepare('SELECT external_id FROM content_items WHERE id=?')
+      .get(id) as { external_id: string } | undefined;
+    return external ? this.getContentByExternalId(external.external_id) : null;
+  }
+
+  getLatestMetric(subjectId: string): MetricSnapshot | null {
+    const row = this.db
+      .prepare(
+        'SELECT * FROM metric_snapshots WHERE subject_id=? ORDER BY observed_at DESC LIMIT 1',
+      )
+      .get(subjectId) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return metricSnapshotSchema.parse({
+      id: row.id,
+      subjectType: row.subject_type,
+      subjectId: row.subject_id,
+      sourceTier: row.source_tier,
+      observedAt: row.observed_at,
+      contentAgeHours: row.content_age_hours,
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      bookmarks: row.bookmarks,
+      quotes: row.quotes,
+      followersGained: row.followers_gained,
+      profileVisits: row.profile_visits,
+      leads: row.leads,
+      conversions: row.conversions,
+      cost: row.cost,
+      rawArtifactRef: row.raw_artifact_ref,
+      warnings: JSON.parse(String(row.warnings_json)),
+    });
+  }
+
+  getEvidenceForContent(contentItemId: string): EvidenceItem[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM evidence_items WHERE content_item_id=? ORDER BY observed_at',
+      )
+      .all(contentItemId) as Record<string, unknown>[];
+    return rows.map((row) =>
+      evidenceItemSchema.parse({
+        id: row.id,
+        contentItemId: row.content_item_id,
+        creatorId: row.creator_id,
+        type: row.type,
+        sourceTier: row.source_tier,
+        locator: row.locator,
+        excerpt: row.excerpt,
+        artifactRef: row.artifact_ref,
+        checksum: row.checksum,
+        observedAt: row.observed_at,
+        payloadVersion: row.payload_version,
+        payload: JSON.parse(String(row.payload_json)),
+      }),
+    );
+  }
+
+  getProjectSubject(projectId: string): ContentItem | null {
+    const row = this.db
+      .prepare(
+        `SELECT c.external_id FROM project_samples ps
+         JOIN content_items c ON c.id=ps.content_item_id
+         WHERE ps.project_id=? AND ps.role='subject' AND ps.included=1 LIMIT 1`,
+      )
+      .get(projectId) as { external_id: string } | undefined;
+    return row ? this.getContentByExternalId(row.external_id) : null;
+  }
+
+  getRun(id: string): AnalysisRun | null {
+    const row = this.db
+      .prepare('SELECT * FROM analysis_runs WHERE id=?')
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return analysisRunSchema.parse({
+      id: row.id,
+      projectId: row.project_id,
+      runType: row.run_type,
+      status: row.status,
+      schemaVersion: row.schema_version,
+      modelVersion: row.model_version,
+      inputFingerprint: row.input_fingerprint,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      checkpoint: JSON.parse(String(row.checkpoint_json)),
+      reportArtifactRef: row.report_artifact_ref,
+      failedStage: row.failed_stage,
+      recoveryAction: row.recovery_action,
     });
   }
 
@@ -211,6 +336,34 @@ export class SignalRoomDatabase {
         );
       }
     })();
+  }
+
+  getFinding(id: string): Finding | null {
+    const row = this.db.prepare('SELECT * FROM findings WHERE id=?').get(id) as
+      Record<string, unknown> | undefined;
+    if (!row) return null;
+    const evidence = this.db
+      .prepare('SELECT * FROM finding_evidence WHERE finding_id=?')
+      .all(id) as Record<string, unknown>[];
+    return findingSchema.parse({
+      id: row.id,
+      projectId: row.project_id,
+      sourceRunId: row.source_run_id,
+      type: row.type,
+      dimension: row.dimension,
+      statement: row.statement,
+      confidence: row.confidence,
+      scope: JSON.parse(String(row.scope_json)),
+      reviewStatus: row.review_status,
+      supersedesFindingId: row.supersedes_finding_id,
+      evidence: evidence.map((relation) => ({
+        evidenceId: relation.evidence_id,
+        relation: relation.relation,
+        weight: relation.weight,
+        note: relation.note,
+      })),
+      createdAt: row.created_at,
+    });
   }
 
   reviewFinding(revision: FindingRevision): void {

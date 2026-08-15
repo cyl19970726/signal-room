@@ -14,7 +14,9 @@ describe('ArtifactStore', () => {
   it('writes content-addressed artifacts with provenance manifests', async () => {
     const root = await mkdtemp(join(tmpdir(), 'signal-room-artifacts-'));
     const store = new ArtifactStore(root);
-    const manifest = await store.put('snapshot', 'text/plain', { method: 'ego-browser' });
+    const manifest = await store.put('snapshot', 'text/plain', {
+      method: 'ego-browser',
+    });
 
     expect(manifest.checksum).toHaveLength(64);
     expect(await readFile(join(root, manifest.ref), 'utf8')).toBe('snapshot');

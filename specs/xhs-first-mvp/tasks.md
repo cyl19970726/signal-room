@@ -21,13 +21,13 @@
   - Ensure real artifacts cannot be committed accidentally.
   - _Requirements: R3, R4, R12_
 
-- [ ] 5. Implement the ego-browser port and XHS adapter shell
+- [x] 5. Implement the ego-browser port and XHS adapter shell
   - Model task-space ownership, login/risk/user-control states, checkpoints, and typed adapter failures.
   - Implement post/share URL resolution and visible post collection.
   - Add synthetic contract tests and an opt-in real validation command.
   - _Requirements: R1, R2, R3, R12_
 
-- [ ] 6. Implement intake and project API
+- [x] 6. Implement intake and project API
   - Resolve inputs, preview object type, create/reuse persistent projects, and expose Run progress over SSE.
   - Preserve partial success and recovery actions.
   - _Requirements: R1, R5_
@@ -37,7 +37,7 @@
   - Keep uncertain term normalization as machine draft.
   - _Requirements: R4_
 
-- [ ] 8. Implement single-post research engine
+- [x] 8. Implement single-post research engine
   - Produce typed findings with evidence relations, scope, confidence, counterevidence, alternatives, and unknowns.
   - Refuse unsupported performance and hidden-metric claims.
   - _Requirements: R6, R9_

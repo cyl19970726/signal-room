@@ -10,14 +10,14 @@
 **Goal**: Implement the ego-browser port, XHS post/share resolver and collector, typed stops/checkpoints, and durable intake/project/run orchestration.
 **Success Criteria**: A post/share input can be resolved, collected, normalized, persisted, and converted into evidence-backed machine-draft findings; partial failures preserve completed work.
 **Tests**: Synthetic adapter contract, URL resolution, failure mapping, checkpoint recovery, API lifecycle, SSE progress.
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 3: Research desk
 
 **Goal**: Implement the approved industrial/utilitarian three-pane single-post research UI with contextual evidence inspection and finding review.
 **Success Criteria**: Intake reaches a persistent project page; findings expose scope and all evidence relations; review creates history; responsive layout has no horizontal overflow.
 **Tests**: UI component/browser checks, accessibility, review API integration, production build.
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stage 4: Real validation and release handoff
 
