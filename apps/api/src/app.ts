@@ -107,6 +107,15 @@ export function buildApp(service: SignalRoomService, options: AppOptions = {}) {
     },
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/api/runs/:id/resume',
+    async (request, reply) => {
+      const run = service.resumeRun(request.params.id);
+      if (!run) return reply.status(404).send({ error: 'run_not_found' });
+      return reply.status(202).send(run);
+    },
+  );
+
   app.get<{ Params: { id: string } }>(
     '/api/content/:id/evidence',
     async (request) => {

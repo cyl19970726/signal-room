@@ -33,8 +33,13 @@ describe('approved visual contract', () => {
   it('renders non-success Run terminal states and their recovery action', () => {
     expect(app).toContain('project.latestRun.recoveryAction');
     expect(app).toContain('部分完成，证据已保留');
+    expect(app).toContain('进程中断，可从 checkpoint 恢复');
     expect(app).toContain('运行被平台或用户接管阻断');
     expect(app).toContain('运行失败');
+    expect(app).toContain('我已处理阻断，显式恢复');
+    expect(app).toContain('project.latestRun.jobs.map');
+    expect(app).toContain('全部持久阶段已完成');
+    expect(app).not.toContain("project.latestRun.status !== 'complete'");
     expect(app).not.toContain('setTimeout(resolve, 80)');
   });
 });

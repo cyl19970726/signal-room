@@ -158,11 +158,11 @@ describe('single-post API vertical', () => {
   it('keeps a slow run queued, then exposes blocked with recoveryAction', async () => {
     const root = await mkdtemp(join(tmpdir(), 'signal-room-api-run-'));
     const runDatabase = new SignalRoomDatabase(':memory:');
-    let execute: (() => void) | undefined;
+    const scheduled: Array<() => void> = [];
     const runApp = buildApp(
       new SignalRoomService(runDatabase, new ArtifactStore(root), browser, {
         scheduleRun(work) {
-          execute = work;
+          scheduled.push(work);
         },
         research() {
           throw new BrowserStopError(
@@ -201,8 +201,10 @@ describe('single-post API vertical', () => {
       });
       expect(queued.json()).toMatchObject({ status: 'queued' });
 
-      expect(execute).toBeTypeOf('function');
-      execute!();
+      expect(scheduled).toHaveLength(1);
+      scheduled.shift()!();
+      expect(scheduled).toHaveLength(1);
+      scheduled.shift()!();
 
       const blocked = await runApp.inject({
         method: 'GET',
@@ -212,6 +214,19 @@ describe('single-post API vertical', () => {
         status: 'blocked',
         failedStage: 'research',
         recoveryAction: 'Wait for explicit user confirmation, then resume.',
+        recoverable: true,
+      });
+      expect(blocked.json()).toMatchObject({
+        jobs: [
+          { stage: 'prepare', status: 'complete', attempt: 1 },
+          {
+            stage: 'research',
+            status: 'blocked',
+            attempt: 1,
+            errorCategory: 'user_controlled',
+          },
+          { stage: 'finalize', status: 'pending', attempt: 0 },
+        ],
       });
       const projectView = (
         await runApp.inject({
@@ -222,6 +237,118 @@ describe('single-post API vertical', () => {
       expect(projectView.latestRun).toMatchObject({
         status: 'blocked',
         recoveryAction: 'Wait for explicit user confirmation, then resume.',
+      });
+
+      const restartedSchedule: Array<() => void> = [];
+      const restartedApp = buildApp(
+        new SignalRoomService(runDatabase, new ArtifactStore(root), browser, {
+          scheduleRun(work) {
+            restartedSchedule.push(work);
+          },
+          research() {
+            throw new BrowserStopError(
+              'user_controlled',
+              'Synthetic user takeover.',
+              'Wait for explicit user confirmation, then resume.',
+            );
+          },
+        }),
+      );
+      try {
+        expect(restartedSchedule).toHaveLength(0);
+        const firstResume = await restartedApp.inject({
+          method: 'POST',
+          url: `/api/runs/${started.id}/resume`,
+        });
+        const duplicateResume = await restartedApp.inject({
+          method: 'POST',
+          url: `/api/runs/${started.id}/resume`,
+        });
+        expect(firstResume.statusCode).toBe(202);
+        expect(duplicateResume.statusCode).toBe(202);
+        expect(restartedSchedule).toHaveLength(1);
+        restartedSchedule.shift()!();
+        expect(runDatabase.getRun(started.id)).toMatchObject({
+          status: 'blocked',
+        });
+        expect(runDatabase.getJobs(started.id)[1]).toMatchObject({
+          stage: 'research',
+          status: 'blocked',
+          attempt: 2,
+        });
+      } finally {
+        await restartedApp.close();
+      }
+    } finally {
+      await runApp.close();
+      runDatabase.close();
+    }
+  });
+
+  it('records a failed stage without exposing its internal diagnostic', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'signal-room-api-failed-run-'));
+    const runDatabase = new SignalRoomDatabase(':memory:');
+    const scheduled: Array<() => void> = [];
+    const runApp = buildApp(
+      new SignalRoomService(runDatabase, new ArtifactStore(root), browser, {
+        scheduleRun(work) {
+          scheduled.push(work);
+        },
+        research() {
+          throw new Error('private research adapter diagnostic');
+        },
+      }),
+    );
+    try {
+      const intake = (
+        await runApp.inject({
+          method: 'POST',
+          url: '/api/intake/resolve',
+          payload: { input: '分享 https://xhslink.cn/o/example' },
+        })
+      ).json<{ contentId: string }>();
+      const project = (
+        await runApp.inject({
+          method: 'POST',
+          url: '/api/projects',
+          payload: { contentId: intake.contentId, objective: 'authority' },
+        })
+      ).json<{ id: string }>();
+      const started = (
+        await runApp.inject({
+          method: 'POST',
+          url: `/api/projects/${project.id}/runs`,
+        })
+      ).json<{ id: string }>();
+
+      scheduled.shift()!();
+      scheduled.shift()!();
+
+      const response = await runApp.inject({
+        method: 'GET',
+        url: `/api/runs/${started.id}`,
+      });
+      expect(response.json()).toMatchObject({
+        status: 'failed',
+        failedStage: 'research',
+        recoverable: true,
+        jobs: [
+          { stage: 'prepare', status: 'complete' },
+          { stage: 'research', status: 'failed', errorCategory: 'stage_error' },
+          { stage: 'finalize', status: 'pending' },
+        ],
+      });
+      expect(response.body).not.toContain(
+        'private research adapter diagnostic',
+      );
+      expect(
+        runDatabase.db
+          .prepare('SELECT error_json FROM jobs WHERE run_id=? AND stage=?')
+          .get(started.id, 'research'),
+      ).toMatchObject({
+        error_json: expect.stringContaining(
+          'private research adapter diagnostic',
+        ),
       });
     } finally {
       await runApp.close();

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findingSchema, metricSnapshotSchema } from './index.js';
+import {
+  findingSchema,
+  metricSnapshotSchema,
+  runJobSchema,
+  runStatusSchema,
+} from './index.js';
 
 const now = '2026-08-16T00:00:00.000Z';
 const id = '11111111-1111-4111-8111-111111111111';
@@ -50,5 +55,34 @@ describe('domain invariants', () => {
     } as const;
 
     expect(() => findingSchema.parse(finding)).toThrow();
+  });
+
+  it('models interrupted Runs and a complete durable job claim ledger', () => {
+    expect(runStatusSchema.parse('interrupted')).toBe('interrupted');
+    expect(
+      runJobSchema.parse({
+        id,
+        runId: id,
+        stage: 'research',
+        sequence: 1,
+        status: 'interrupted',
+        inputFingerprint: 'fingerprint',
+        attempt: 2,
+        checkpoint: { sourceTextEvidenceId: id },
+        errorCategory: 'process_interrupted',
+        leaseOwner: null,
+        leaseAcquiredAt: now,
+        leaseExpiresAt: now,
+        heartbeatAt: now,
+        startedAt: now,
+        finishedAt: now,
+        recoveryAction: 'Explicitly resume after checking the prior process.',
+        updatedAt: now,
+      }),
+    ).toMatchObject({
+      stage: 'research',
+      status: 'interrupted',
+      attempt: 2,
+    });
   });
 });

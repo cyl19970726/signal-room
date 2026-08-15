@@ -36,6 +36,7 @@ export function App() {
   const [message, setMessage] = useState('');
   const [navOpen, setNavOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   const selectedFinding = useMemo(
     () =>
@@ -54,6 +55,8 @@ export function App() {
   async function loadProject(projectId: string, expectedRunId?: string) {
     try {
       let view = await api.getProject(projectId);
+      setProject(view);
+      setSelectedFindingId(view.findings[0]?.id ?? null);
       const pendingRunId =
         expectedRunId ??
         (view.latestRun && !isTerminalRun(view.latestRun.status)
@@ -101,6 +104,22 @@ export function App() {
     }
   }
 
+  async function resumeLatestRun() {
+    const run = project?.latestRun;
+    if (!project || !run || !run.recoverable) return;
+    setResuming(true);
+    setMessage('已显式请求恢复，正在从最后一个已提交阶段继续…');
+    try {
+      const resumed = await api.resumeRun(run.id);
+      await loadProject(project.project.id, resumed.id);
+      setMessage('恢复运行已到达终态。');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '恢复运行失败。');
+    } finally {
+      setResuming(false);
+    }
+  }
+
   function selectFinding(id: string) {
     setSelectedFindingId(id);
     setInspectorOpen(true);
@@ -126,6 +145,9 @@ export function App() {
             project={project}
             selectedId={selectedFindingId}
             onSelect={selectFinding}
+            onResume={() => void resumeLatestRun()}
+            resuming={resuming}
+            runMessage={message}
           />
         ) : (
           <IntakeDesk
@@ -334,10 +356,16 @@ function ProjectDesk({
   project,
   selectedId,
   onSelect,
+  onResume,
+  resuming,
+  runMessage,
 }: {
   project: ProjectView;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onResume: () => void;
+  resuming: boolean;
+  runMessage: string;
 }) {
   const sample = project.samples[0];
   const unknowns = project.findings.filter(
@@ -356,19 +384,46 @@ function ProjectDesk({
           {project.project.status}
         </span>
       </header>
-      {project.latestRun && project.latestRun.status !== 'complete' && (
+      {project.latestRun && (
         <section
           className={`run-outcome ${project.latestRun.status}`}
-          role="alert"
+          role={project.latestRun.status === 'complete' ? 'status' : 'alert'}
         >
-          <div>
-            <span className="band-label">RUN TERMINAL STATE</span>
-            <strong>{runStatusLabel(project.latestRun.status)}</strong>
+          <div className="run-summary">
+            <div>
+              <span className="band-label">DURABLE RUN STATE</span>
+              <strong>{runStatusLabel(project.latestRun.status)}</strong>
+            </div>
+            <p>
+              {project.latestRun.recoveryAction ??
+                runDefaultMessage(project.latestRun.status)}
+            </p>
+            {runMessage && <small role="status">{runMessage}</small>}
           </div>
-          <p>
-            {project.latestRun.recoveryAction ??
-              '当前 Run 没有提供恢复动作，请检查本地 API 与持久化证据。'}
-          </p>
+          <ol className="run-ledger" aria-label="持久运行阶段">
+            {project.latestRun.jobs.map((job) => (
+              <li className={job.status} key={job.id}>
+                <span>{String(job.sequence + 1).padStart(2, '0')}</span>
+                <div>
+                  <strong>{runStageLabel(job.stage)}</strong>
+                  <small>
+                    {job.status} · attempt {job.attempt} · checkpoint{' '}
+                    {Object.keys(job.checkpoint).length ? 'saved' : 'empty'}
+                  </small>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {project.latestRun.recoverable && (
+            <button
+              className="resume-action"
+              onClick={onResume}
+              disabled={resuming}
+            >
+              <RefreshCw className={resuming ? 'spin' : ''} size={16} />
+              {resuming ? '正在恢复' : '我已处理阻断，显式恢复'}
+            </button>
+          )}
         </section>
       )}
       <section className="verdict-band" id="verdict">
@@ -578,13 +633,17 @@ function knownMetric(value: number | null | undefined) {
 }
 
 function isTerminalRun(status: RunStatus): boolean {
-  return ['complete', 'partial', 'blocked', 'failed'].includes(status);
+  return ['complete', 'interrupted', 'partial', 'blocked', 'failed'].includes(
+    status,
+  );
 }
 
 function runStatusLabel(status: RunStatus): string {
   switch (status) {
     case 'partial':
       return '部分完成，证据已保留';
+    case 'interrupted':
+      return '进程中断，可从 checkpoint 恢复';
     case 'blocked':
       return '运行被平台或用户接管阻断';
     case 'failed':
@@ -595,5 +654,29 @@ function runStatusLabel(status: RunStatus): string {
       return '执行中';
     default:
       return '运行完成';
+  }
+}
+
+function runDefaultMessage(status: RunStatus): string {
+  switch (status) {
+    case 'queued':
+      return 'Run 与阶段账本已持久化，正在等待下一阶段领取。';
+    case 'running':
+      return '当前阶段已领取；heartbeat 与 checkpoint 会写入本地 SQLite。';
+    case 'complete':
+      return '全部持久阶段已完成；重复 start 或 resume 不会创建重复结果。';
+    default:
+      return '当前 Run 没有提供恢复动作，请检查本地 API 与持久化证据。';
+  }
+}
+
+function runStageLabel(stage: 'prepare' | 'research' | 'finalize'): string {
+  switch (stage) {
+    case 'prepare':
+      return '准备持久证据';
+    case 'research':
+      return '生成并写入 Findings';
+    case 'finalize':
+      return '核验并完成 Run';
   }
 }

@@ -27,10 +27,20 @@ export const projectStatusSchema = z.enum([
 export const runStatusSchema = z.enum([
   'queued',
   'running',
+  'interrupted',
   'complete',
   'partial',
   'blocked',
   'failed',
+]);
+export const runStageSchema = z.enum(['prepare', 'research', 'finalize']);
+export const runJobStatusSchema = z.enum([
+  'pending',
+  'running',
+  'complete',
+  'blocked',
+  'failed',
+  'interrupted',
 ]);
 export const findingTypeSchema = z.enum([
   'fact',
@@ -190,6 +200,26 @@ export const analysisRunSchema = z.object({
   recoveryAction: z.string().nullable(),
 });
 
+export const runJobSchema = z.object({
+  id: idSchema,
+  runId: idSchema,
+  stage: runStageSchema,
+  sequence: z.number().int().nonnegative(),
+  status: runJobStatusSchema,
+  inputFingerprint: z.string().min(1),
+  attempt: z.number().int().nonnegative(),
+  checkpoint: z.record(z.string(), z.unknown()),
+  errorCategory: z.string().min(1).nullable(),
+  leaseOwner: z.string().min(1).nullable(),
+  leaseAcquiredAt: isoDateTimeSchema.nullable(),
+  leaseExpiresAt: isoDateTimeSchema.nullable(),
+  heartbeatAt: isoDateTimeSchema.nullable(),
+  startedAt: isoDateTimeSchema.nullable(),
+  finishedAt: isoDateTimeSchema.nullable(),
+  recoveryAction: z.string().min(1).nullable(),
+  updatedAt: isoDateTimeSchema,
+});
+
 export const findingEvidenceSchema = z.object({
   evidenceId: idSchema,
   relation: evidenceRelationSchema,
@@ -266,6 +296,7 @@ export type MetricSnapshot = z.infer<typeof metricSnapshotSchema>;
 export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
 export type ResearchProject = z.infer<typeof researchProjectSchema>;
 export type AnalysisRun = z.infer<typeof analysisRunSchema>;
+export type RunJob = z.infer<typeof runJobSchema>;
 export type Finding = z.infer<typeof findingSchema>;
 export type FindingRevision = z.infer<typeof findingRevisionSchema>;
 export type CollectedPost = z.infer<typeof collectedPostSchema>;

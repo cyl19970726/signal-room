@@ -14,6 +14,7 @@ erDiagram
     RESEARCH_PROJECT ||--o{ PROJECT_SAMPLE : contains
     CONTENT_ITEM ||--o{ PROJECT_SAMPLE : reused_in
     RESEARCH_PROJECT ||--o{ ANALYSIS_RUN : executes
+    ANALYSIS_RUN ||--o{ RUN_JOB : owns
     RESEARCH_PROJECT ||--o{ FINDING : concludes
     ANALYSIS_RUN ||--o{ FINDING : generates
 
@@ -39,7 +40,8 @@ Platform          xiaohongshu
 ProjectType       single_post | series_topic | creator
 Objective         awareness | growth | authority | conversion
 ProjectStatus     inbox | scoping | collecting | analyzing | ready | needs_data | archived
-RunStatus         queued | running | complete | partial | blocked | failed
+RunStatus         queued | running | interrupted | complete | partial | blocked | failed
+RunJobStatus      pending | running | interrupted | complete | blocked | failed
 FindingType       fact | observation | hypothesis | unknown
 ReviewStatus      machine_draft | human_confirmed | human_revised | rejected
 EvidenceRelation  supports | contradicts | alternative | calculation_input
@@ -119,6 +121,19 @@ Unknown metrics are `null`; zero means an observed zero.
 - project ID, run type, status
 - schema/model versions, input fingerprint
 - start/finish timestamps, checkpoint, report artifact
+
+### RunJob
+
+- ordered stage and stage input fingerprint;
+- status, attempt, and a stage-safe JSON checkpoint;
+- error category and recovery action;
+- lease owner, lease acquisition/expiry, heartbeat, start/finish/update times.
+
+`prepare`, `research`, and `finalize` are the current single-post stages. A
+service restart changes an active Run to `interrupted`; it never silently claims
+pending work. Completed stages remain complete when the user explicitly resumes.
+Findings are unique by source Run and dimension so a retried research stage
+cannot duplicate them.
 
 ### Finding
 
