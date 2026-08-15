@@ -1,22 +1,22 @@
 # Xiaohongshu-first MVP Implementation Plan
 
-- [ ] 1. Bootstrap the open-source monorepo
+- [x] 1. Bootstrap the open-source monorepo
   - Add pnpm workspace, TypeScript, linting, formatting, Vitest, and CI.
   - Add secret/artifact-safe ignore rules and environment examples.
   - _Requirements: R12_
 
-- [ ] 2. Implement domain contracts
+- [x] 2. Implement domain contracts
   - Add Creator, snapshots, ContentItem, MetricSnapshot, EvidenceItem, ResearchProject, sample, run, finding, brief, experiment, published content, and review schemas.
   - Encode null-versus-zero and review-state invariants.
   - _Requirements: R3, R5, R9, R10_
 
-- [ ] 3. Implement SQLite persistence
+- [x] 3. Implement SQLite persistence
   - Add versioned, idempotent migrations and repositories.
   - Enable foreign keys and WAL.
   - Test deduplication and append-only snapshots.
   - _Requirements: R3, R5, R10_
 
-- [ ] 4. Implement artifact storage
+- [x] 4. Implement artifact storage
   - Add configured external artifact root, checksums, and provenance manifests.
   - Ensure real artifacts cannot be committed accidentally.
   - _Requirements: R3, R4, R12_
