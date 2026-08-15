@@ -29,7 +29,7 @@
   - Exercise Web client → Fastify → on-disk SQLite.
   - _Requirements: R4, R6_
 
-- [ ] 6. Pass reviewer and open-source gates
+- [x] 6. Pass reviewer and open-source gates
   - Run local and fresh-clone install/format/lint/typecheck/test/build/audit.
   - Record source/dist pollution and secret scans.
   - Open a Draft PR that closes #2 without claiming #3–#5.

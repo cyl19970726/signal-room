@@ -58,6 +58,7 @@ The command performs read-only collection and reports contract coverage without 
 - [Durable Run recovery requirements](specs/run-recovery/requirements.md)
 - [Durable Run recovery design](specs/run-recovery/design.md)
 - [Durable Run recovery tasks](specs/run-recovery/tasks.md)
+- [Durable Run recovery validation](docs/validation/run-recovery.md)
 
 ## Status
 
