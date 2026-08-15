@@ -31,6 +31,7 @@ Authenticated collection uses the user's existing login through [ego-browser](do
 - [Data model](docs/data-model.md)
 - [ego-browser Xiaohongshu adapter](docs/ego-browser-xhs-adapter.md)
 - [UX and visual specification](docs/ux-spec.md)
+- [Reviewer plan and merge gates](docs/reviewer-plan.md)
 - [MVP requirements](specs/xhs-first-mvp/requirements.md)
 - [MVP technical design](specs/xhs-first-mvp/design.md)
 - [Implementation plan](specs/xhs-first-mvp/tasks.md)
