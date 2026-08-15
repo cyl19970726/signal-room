@@ -50,8 +50,8 @@ describe('single-post API vertical', () => {
   });
 
   afterEach(async () => {
-    await app.close();
-    database.close();
+    if (app) await app.close();
+    if (database) database.close();
   });
 
   it('collects, persists, researches, traces evidence, and reviews a finding', async () => {
