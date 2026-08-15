@@ -673,7 +673,7 @@ textarea::placeholder {
   display: none;
 }
 
-@media (max-width: 1199px) {
+@media (max-width: 1279px) {
   .workspace {
     grid-template-columns: 216px minmax(0, 1fr);
   }

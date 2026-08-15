@@ -114,12 +114,18 @@ export class EgoBrowserPort implements AuthenticatedBrowserPort {
       });
       child.on('close', (code) => {
         clearTimeout(timer);
-        if (code === 0) resolve(stdout);
+        // ego-browser's cliLog channel is emitted on stderr by the local CLI.
+        // Treat both streams as protocol output; neither is persisted as a log.
+        if (code === 0) resolve(combineCliOutput(stdout, stderr));
         else reject(mapBrowserFailure(`${stdout}\n${stderr}`));
       });
       child.stdin.end(script);
     });
   }
+}
+
+export function combineCliOutput(stdout: string, stderr: string): string {
+  return [stdout, stderr].filter(Boolean).join('\n');
 }
 
 export function mapBrowserFailure(message: string): BrowserStopError {

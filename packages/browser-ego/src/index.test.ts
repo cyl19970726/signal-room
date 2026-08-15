@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapBrowserFailure } from './index.js';
+import { combineCliOutput, mapBrowserFailure } from './index.js';
 
 describe('ego-browser failure mapping', () => {
   it.each([
@@ -11,4 +11,10 @@ describe('ego-browser failure mapping', () => {
   ] as const)('maps %s to a hard stop', (message, expected) => {
     expect(mapBrowserFailure(message).reason).toBe(expected);
   });
+});
+
+it('reads cliLog protocol markers from stderr without persisting a diagnostic log', () => {
+  expect(combineCliOutput('', 'SIGNAL_ROOM_RESULT:encoded')).toBe(
+    'SIGNAL_ROOM_RESULT:encoded',
+  );
 });

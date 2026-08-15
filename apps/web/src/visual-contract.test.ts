@@ -26,6 +26,7 @@ describe('approved visual contract', () => {
       'grid-template-columns: 216px minmax(680px, 1fr) minmax(360px, 420px)',
     );
     expect(css).toContain('@media (max-width: 1023px)');
+    expect(css).toContain('@media (max-width: 1279px)');
     expect(css).toContain('transform: translateX(100%)');
   });
 });

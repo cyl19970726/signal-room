@@ -64,6 +64,8 @@
   - _Requirements: R1–R12_
 
 - [ ] 13. Validate the first real vertical slice
+  - Authenticated single-post collection, persistence, findings, and UI traceability validated on 2026-08-16; see `docs/validation/xhs-single-post.md`.
+  - Remaining before closing this item: exercise a real user-takeover/login/risk interruption and resume, plus legitimate media evidence when available.
   - Use an authorized ego-browser task space to collect one Xiaohongshu post.
   - Verify interruption/resume, evidence traceability, missing-data language, and no secret/artifact leakage.
   - Record the validation without committing creator media or private data.
