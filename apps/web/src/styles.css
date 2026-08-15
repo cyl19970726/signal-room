@@ -346,6 +346,36 @@ textarea::placeholder {
 .project-status.ready {
   color: var(--evidence);
 }
+.project-status.needs_data {
+  color: var(--caution);
+}
+.run-outcome {
+  margin-top: 18px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: minmax(190px, 0.4fr) 1fr;
+  gap: 24px;
+  border: 1px solid var(--caution);
+  color: #705313;
+  background: rgba(165, 124, 32, 0.08);
+}
+.run-outcome.failed {
+  border-color: var(--signal);
+  color: #8a3e1b;
+  background: rgba(230, 107, 46, 0.08);
+}
+.run-outcome strong {
+  display: block;
+  margin-top: 6px;
+  font:
+    600 13px 'IBM Plex Mono',
+    monospace;
+}
+.run-outcome p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
 .verdict-band {
   margin-top: 18px;
   padding: 24px 0 30px;
@@ -768,6 +798,10 @@ textarea::placeholder {
   }
   .verdict-band {
     grid-template-columns: 1fr;
+  }
+  .run-outcome {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
   .finding-row {
     grid-template-columns: 28px 1fr 18px;

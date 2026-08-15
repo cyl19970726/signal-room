@@ -33,6 +33,18 @@ export interface FindingView {
   evidence: FindingEvidenceView[];
 }
 
+export type RunStatus =
+  'queued' | 'running' | 'complete' | 'partial' | 'blocked' | 'failed';
+
+export interface RunView {
+  id: string;
+  projectId: string;
+  status: RunStatus;
+  checkpoint: Record<string, unknown>;
+  failedStage: string | null;
+  recoveryAction: string | null;
+}
+
 export interface ProjectView {
   project: {
     id: string;
@@ -50,7 +62,15 @@ export interface ProjectView {
     content_type: string;
   }>;
   findings: FindingView[];
+  latestRun: RunView | null;
 }
+
+const terminalRunStatuses = new Set<RunStatus>([
+  'complete',
+  'partial',
+  'blocked',
+  'failed',
+]);
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -88,9 +108,27 @@ export const api = {
     });
   },
   startRun(projectId: string) {
-    return request<{ id: string }>(`/api/projects/${projectId}/runs`, {
+    return request<RunView>(`/api/projects/${projectId}/runs`, {
       method: 'POST',
     });
+  },
+  getRun(runId: string) {
+    return request<RunView>(`/api/runs/${runId}`);
+  },
+  async waitForRun(
+    runId: string,
+    options: { intervalMs?: number; timeoutMs?: number } = {},
+  ): Promise<RunView> {
+    const intervalMs = options.intervalMs ?? 250;
+    const deadline = Date.now() + (options.timeoutMs ?? 30_000);
+    while (Date.now() <= deadline) {
+      const run = await this.getRun(runId);
+      if (terminalRunStatuses.has(run.status)) return run;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new Error(
+      '研究运行仍未到达终态。请检查本地 API 后通过持久项目继续恢复。',
+    );
   },
   getProject(projectId: string) {
     return request<ProjectView>(`/api/projects/${projectId}`);

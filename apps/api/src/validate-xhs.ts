@@ -23,8 +23,8 @@ const service = new SignalRoomService(
   database,
   new ArtifactStore(join(validationRoot, 'artifacts')),
   new EgoBrowserPort({
-    profile: process.env.SIGNAL_ROOM_EGO_PROFILE ?? 'hhh-01',
-    taskSpace: process.env.SIGNAL_ROOM_EGO_TASK_SPACE ?? 'signal-room xhs mvp',
+    profile: requiredEnvironment('SIGNAL_ROOM_EGO_PROFILE'),
+    taskSpace: requiredEnvironment('SIGNAL_ROOM_EGO_TASK_SPACE'),
   }),
 );
 
@@ -36,7 +36,7 @@ try {
     researchQuestion: '这条内容目前有哪些可验证的公开事实与研究边界？',
   });
   const run = service.startRun(project.id);
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const persistedRun = await waitForTerminalRun(service, run.id);
   const view = service.getProject(project.id) as {
     project: { status: string };
     findings: Array<{
@@ -46,7 +46,6 @@ try {
       evidence: Array<{ relation: string }>;
     }>;
   };
-  const persistedRun = service.getRun(run.id);
   process.stdout.write(
     `${JSON.stringify(
       {
@@ -73,4 +72,28 @@ try {
   );
 } finally {
   database.close();
+}
+
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+async function waitForTerminalRun(
+  signalRoom: SignalRoomService,
+  runId: string,
+) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const run = signalRoom.getRun(runId);
+    if (
+      run &&
+      ['complete', 'partial', 'blocked', 'failed'].includes(run.status)
+    ) {
+      return run;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('Timed out waiting for the validation run to finish.');
 }

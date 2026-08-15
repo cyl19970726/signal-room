@@ -4,7 +4,7 @@ Date: 2026-08-16
 
 ## Covered
 
-- Used the authorized share link through `ego-browser` with the configured `hhh-01` profile and the isolated `signal-room xhs mvp` task space.
+- Used the authorized share link through `ego-browser` with an explicitly configured local profile and isolated task space.
 - Performed read-only navigation and extraction. No like, bookmark, comment, follow, message, or publish action was attempted.
 - Resolved the share link to a canonical post and normalized a video `ContentItem`, creator identity, a source snapshot, and a public metric snapshot.
 - Observed public like, comment, share, and bookmark fields. Views and all owner-only outcomes remained `null` and rendered as unknown.

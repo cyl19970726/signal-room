@@ -12,8 +12,18 @@ import {
   type ResearchProject,
 } from '@signal-room/domain';
 import { XhsPostCollector } from '@signal-room/platform-xhs';
-import { researchSinglePost } from '@signal-room/research-single';
+import {
+  researchSinglePost,
+  type SinglePostResearchInput,
+} from '@signal-room/research-single';
 import type { SignalRoomDatabase } from '@signal-room/storage';
+
+export interface SignalRoomServiceOptions {
+  scheduleRun?: (execute: () => void) => void;
+  research?: (
+    input: SinglePostResearchInput,
+  ) => ReturnType<typeof researchSinglePost>;
+}
 
 export interface IntakePreview {
   contentId: string;
@@ -30,13 +40,20 @@ export interface IntakePreview {
 
 export class SignalRoomService {
   private readonly collector: XhsPostCollector;
+  private readonly scheduleRun: (execute: () => void) => void;
+  private readonly research: (
+    input: SinglePostResearchInput,
+  ) => ReturnType<typeof researchSinglePost>;
 
   constructor(
     private readonly database: SignalRoomDatabase,
     private readonly artifacts: ArtifactStore,
     browser: AuthenticatedBrowserPort,
+    options: SignalRoomServiceOptions = {},
   ) {
     this.collector = new XhsPostCollector(browser);
+    this.scheduleRun = options.scheduleRun ?? queueMicrotask;
+    this.research = options.research ?? researchSinglePost;
   }
 
   inspectInput(input: string) {
@@ -224,7 +241,7 @@ export class SignalRoomService {
       recoveryAction: null,
     });
     this.database.insertRun(run);
-    queueMicrotask(() => this.executeResearchRun(run.id));
+    this.scheduleRun(() => this.executeResearchRun(run.id));
     return run;
   }
 
@@ -288,7 +305,7 @@ export class SignalRoomService {
         },
         warnings: metric?.warnings ?? [],
       };
-      for (const finding of researchSinglePost({
+      for (const finding of this.research({
         projectId: run.projectId,
         runId,
         post,

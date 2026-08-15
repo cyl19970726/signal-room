@@ -29,4 +29,12 @@ describe('approved visual contract', () => {
     expect(css).toContain('@media (max-width: 1279px)');
     expect(css).toContain('transform: translateX(100%)');
   });
+
+  it('renders non-success Run terminal states and their recovery action', () => {
+    expect(app).toContain('project.latestRun.recoveryAction');
+    expect(app).toContain('部分完成，证据已保留');
+    expect(app).toContain('运行被平台或用户接管阻断');
+    expect(app).toContain('运行失败');
+    expect(app).not.toContain('setTimeout(resolve, 80)');
+  });
 });

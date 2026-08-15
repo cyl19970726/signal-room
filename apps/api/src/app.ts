@@ -18,9 +18,28 @@ const reviewBody = z.object({
   actor: z.string().min(1).default('local_user'),
 });
 
-export function buildApp(service: SignalRoomService) {
+export interface AppOptions {
+  allowedOrigins?: readonly string[];
+}
+
+export function buildApp(service: SignalRoomService, options: AppOptions = {}) {
   const app = Fastify({ logger: false });
-  void app.register(cors, { origin: true });
+  const allowedOrigins = new Set(options.allowedOrigins ?? []);
+  void app.register(cors, {
+    origin(origin, callback) {
+      callback(null, origin !== undefined && allowedOrigins.has(origin));
+    },
+  });
+
+  app.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin;
+    if (origin && !allowedOrigins.has(origin)) {
+      return reply.status(403).send({
+        error: 'origin_not_allowed',
+        message: 'Request origin is not allowed.',
+      });
+    }
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof BrowserStopError) {
@@ -43,8 +62,7 @@ export function buildApp(service: SignalRoomService) {
     }
     return reply.status(500).send({
       error: 'internal_error',
-      message:
-        error instanceof Error ? error.message : 'Unknown internal error',
+      message: 'An unexpected internal error occurred.',
     });
   });
 
@@ -81,12 +99,11 @@ export function buildApp(service: SignalRoomService) {
   );
 
   app.get<{ Params: { id: string } }>(
-    '/api/runs/:id/events',
+    '/api/runs/:id',
     async (request, reply) => {
       const run = service.getRun(request.params.id);
       if (!run) return reply.status(404).send({ error: 'run_not_found' });
-      reply.header('content-type', 'text/event-stream; charset=utf-8');
-      return `event: progress\ndata: ${JSON.stringify({ status: run.status, checkpoint: run.checkpoint })}\n\n`;
+      return run;
     },
   );
 

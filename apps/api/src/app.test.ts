@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ArtifactStore } from '@signal-room/artifacts';
-import type { AuthenticatedBrowserPort } from '@signal-room/browser-ego';
+import {
+  BrowserStopError,
+  type AuthenticatedBrowserPort,
+} from '@signal-room/browser-ego';
 import { SignalRoomDatabase } from '@signal-room/storage';
 import { buildApp } from './app.js';
 import { SignalRoomService } from './service.js';
@@ -42,6 +45,7 @@ describe('single-post API vertical', () => {
     const root = await mkdtemp(join(tmpdir(), 'signal-room-api-'));
     app = buildApp(
       new SignalRoomService(database, new ArtifactStore(root), browser),
+      { allowedOrigins: ['http://127.0.0.1:4318'] },
     );
   });
 
@@ -99,5 +103,129 @@ describe('single-post API vertical', () => {
     expect(
       database.db.prepare('SELECT COUNT(*) count FROM finding_revisions').get(),
     ).toEqual({ count: 1 });
+  });
+
+  it('rejects a malicious browser origin before executing a write route', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/intake/resolve',
+      headers: { origin: 'https://malicious.example' },
+      payload: { input: '分享 https://xhslink.cn/o/example' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: 'origin_not_allowed',
+      message: 'Request origin is not allowed.',
+    });
+  });
+
+  it('does not expose unexpected internal error messages', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'signal-room-api-error-'));
+    const errorBrowser: AuthenticatedBrowserPort = {
+      taskSpace: 'synthetic',
+      profile: 'synthetic',
+      async resolveAndCollect() {
+        throw new Error('private filesystem path and adapter diagnostic');
+      },
+    };
+    const errorDatabase = new SignalRoomDatabase(':memory:');
+    const errorApp = buildApp(
+      new SignalRoomService(
+        errorDatabase,
+        new ArtifactStore(root),
+        errorBrowser,
+      ),
+    );
+    try {
+      const response = await errorApp.inject({
+        method: 'POST',
+        url: '/api/intake/resolve',
+        payload: { input: '分享 https://xhslink.cn/o/example' },
+      });
+      expect(response.statusCode).toBe(500);
+      expect(response.body).not.toContain('private filesystem');
+      expect(response.json()).toEqual({
+        error: 'internal_error',
+        message: 'An unexpected internal error occurred.',
+      });
+    } finally {
+      await errorApp.close();
+      errorDatabase.close();
+    }
+  });
+
+  it('keeps a slow run queued, then exposes blocked with recoveryAction', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'signal-room-api-run-'));
+    const runDatabase = new SignalRoomDatabase(':memory:');
+    let execute: (() => void) | undefined;
+    const runApp = buildApp(
+      new SignalRoomService(runDatabase, new ArtifactStore(root), browser, {
+        scheduleRun(work) {
+          execute = work;
+        },
+        research() {
+          throw new BrowserStopError(
+            'user_controlled',
+            'Synthetic user takeover.',
+            'Wait for explicit user confirmation, then resume.',
+          );
+        },
+      }),
+    );
+    try {
+      const intake = (
+        await runApp.inject({
+          method: 'POST',
+          url: '/api/intake/resolve',
+          payload: { input: '分享 https://xhslink.cn/o/example' },
+        })
+      ).json<{ contentId: string }>();
+      const project = (
+        await runApp.inject({
+          method: 'POST',
+          url: '/api/projects',
+          payload: { contentId: intake.contentId, objective: 'authority' },
+        })
+      ).json<{ id: string }>();
+      const started = (
+        await runApp.inject({
+          method: 'POST',
+          url: `/api/projects/${project.id}/runs`,
+        })
+      ).json<{ id: string }>();
+
+      const queued = await runApp.inject({
+        method: 'GET',
+        url: `/api/runs/${started.id}`,
+      });
+      expect(queued.json()).toMatchObject({ status: 'queued' });
+
+      expect(execute).toBeTypeOf('function');
+      execute!();
+
+      const blocked = await runApp.inject({
+        method: 'GET',
+        url: `/api/runs/${started.id}`,
+      });
+      expect(blocked.json()).toMatchObject({
+        status: 'blocked',
+        failedStage: 'research',
+        recoveryAction: 'Wait for explicit user confirmation, then resume.',
+      });
+      const projectView = (
+        await runApp.inject({
+          method: 'GET',
+          url: `/api/projects/${project.id}`,
+        })
+      ).json<{ latestRun: { status: string; recoveryAction: string } }>();
+      expect(projectView.latestRun).toMatchObject({
+        status: 'blocked',
+        recoveryAction: 'Wait for explicit user confirmation, then resume.',
+      });
+    } finally {
+      await runApp.close();
+      runDatabase.close();
+    }
   });
 });

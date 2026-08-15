@@ -27,12 +27,37 @@ const artifacts = new ArtifactStore(
   resolve(import.meta.dirname, '../../..'),
 );
 const browser = new EgoBrowserPort({
-  profile: process.env.SIGNAL_ROOM_EGO_PROFILE ?? 'hhh-01',
-  taskSpace: process.env.SIGNAL_ROOM_EGO_TASK_SPACE ?? 'signal-room xhs mvp',
+  profile: requiredEnvironment('SIGNAL_ROOM_EGO_PROFILE'),
+  taskSpace: requiredEnvironment('SIGNAL_ROOM_EGO_TASK_SPACE'),
 });
-const app = buildApp(new SignalRoomService(database, artifacts, browser));
+const app = buildApp(new SignalRoomService(database, artifacts, browser), {
+  allowedOrigins: configuredLocalOrigins(
+    requiredEnvironment('SIGNAL_ROOM_WEB_ORIGIN'),
+  ),
+});
 
 await app.listen({
   port: Number(process.env.SIGNAL_ROOM_API_PORT ?? 4317),
   host: '127.0.0.1',
 });
+
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+function configuredLocalOrigins(value: string): string[] {
+  return value.split(',').map((entry) => {
+    const url = new URL(entry.trim());
+    if (
+      url.protocol !== 'http:' ||
+      !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+    ) {
+      throw new Error(
+        'SIGNAL_ROOM_WEB_ORIGIN must contain only explicit local HTTP origins.',
+      );
+    }
+    return url.origin;
+  });
+}

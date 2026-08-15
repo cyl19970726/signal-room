@@ -408,7 +408,13 @@ export class SignalRoomDatabase {
         )
         .all(finding.id),
     }));
-    return { project, samples, findings: hydratedFindings };
+    const latestRunRow = this.db
+      .prepare(
+        'SELECT id FROM analysis_runs WHERE project_id=? ORDER BY rowid DESC LIMIT 1',
+      )
+      .get(projectId) as { id: string } | undefined;
+    const latestRun = latestRunRow ? this.getRun(latestRunRow.id) : null;
+    return { project, samples, findings: hydratedFindings, latestRun };
   }
 }
 

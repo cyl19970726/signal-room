@@ -42,14 +42,14 @@ domain → no infrastructure dependencies
 - `POST /api/projects`
 - `GET /api/projects/:id`
 - `POST /api/projects/:id/runs`
-- `GET /api/runs/:id/events`
+- `GET /api/runs/:id`
 - `GET /api/content/:id/evidence`
 - `POST /api/findings/:id/reviews`
 
 ## Job model
 
 - Persist jobs and stages in SQLite.
-- Emit progress over SSE.
+- Expose persisted Run state for reliable client polling until a terminal state.
 - Fingerprint stage inputs.
 - Checkpoint ego-browser collection after each bounded operation.
 - Treat source collection, media processing, and research as independent recoverable stages.

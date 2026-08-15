@@ -17,6 +17,7 @@ import {
   type FindingView,
   type IntakePreview,
   type ProjectView,
+  type RunStatus,
 } from './api.ts';
 
 type LoadState = 'idle' | 'collecting' | 'creating' | 'ready' | 'error';
@@ -50,9 +51,19 @@ export function App() {
     void loadProject(projectId);
   }, []);
 
-  async function loadProject(projectId: string) {
+  async function loadProject(projectId: string, expectedRunId?: string) {
     try {
-      const view = await api.getProject(projectId);
+      let view = await api.getProject(projectId);
+      const pendingRunId =
+        expectedRunId ??
+        (view.latestRun && !isTerminalRun(view.latestRun.status)
+          ? view.latestRun.id
+          : undefined);
+      if (pendingRunId) {
+        setMessage('研究运行中，正在等待持久 Run 到达终态…');
+        await api.waitForRun(pendingRunId);
+        view = await api.getProject(projectId);
+      }
       setProject(view);
       setSelectedFindingId(view.findings[0]?.id ?? null);
       setState('ready');
@@ -81,10 +92,9 @@ export function App() {
     setMessage('正在创建 ResearchProject 并生成可追溯的 machine draft…');
     try {
       const created = await api.createProject(preview.contentId, question);
-      await api.startRun(created.id);
-      await new Promise((resolve) => setTimeout(resolve, 80));
+      const run = await api.startRun(created.id);
       history.replaceState(null, '', `?project=${created.id}`);
-      await loadProject(created.id);
+      await loadProject(created.id, run.id);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '研究运行失败。');
       setState('error');
@@ -346,6 +356,21 @@ function ProjectDesk({
           {project.project.status}
         </span>
       </header>
+      {project.latestRun && project.latestRun.status !== 'complete' && (
+        <section
+          className={`run-outcome ${project.latestRun.status}`}
+          role="alert"
+        >
+          <div>
+            <span className="band-label">RUN TERMINAL STATE</span>
+            <strong>{runStatusLabel(project.latestRun.status)}</strong>
+          </div>
+          <p>
+            {project.latestRun.recoveryAction ??
+              '当前 Run 没有提供恢复动作，请检查本地 API 与持久化证据。'}
+          </p>
+        </section>
+      )}
       <section className="verdict-band" id="verdict">
         <div>
           <span className="band-label">当前判断</span>
@@ -550,4 +575,25 @@ function knownMetric(value: number | null | undefined) {
   return value === null || value === undefined
     ? 'unknown'
     : new Intl.NumberFormat('zh-CN').format(value);
+}
+
+function isTerminalRun(status: RunStatus): boolean {
+  return ['complete', 'partial', 'blocked', 'failed'].includes(status);
+}
+
+function runStatusLabel(status: RunStatus): string {
+  switch (status) {
+    case 'partial':
+      return '部分完成，证据已保留';
+    case 'blocked':
+      return '运行被平台或用户接管阻断';
+    case 'failed':
+      return '运行失败';
+    case 'queued':
+      return '等待执行';
+    case 'running':
+      return '执行中';
+    default:
+      return '运行完成';
+  }
 }

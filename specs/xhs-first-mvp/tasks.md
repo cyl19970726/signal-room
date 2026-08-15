@@ -28,7 +28,7 @@
   - _Requirements: R1, R2, R3, R12_
 
 - [x] 6. Implement intake and project API
-  - Resolve inputs, preview object type, create/reuse persistent projects, and expose Run progress over SSE.
+  - Resolve inputs, preview object type, create/reuse persistent projects, and expose persisted Run state for reliable terminal-state polling.
   - Preserve partial success and recovery actions.
   - _Requirements: R1, R5_
 
@@ -45,9 +45,14 @@
 - [x] 9. Implement the local research UI
   - Follow the approved UX specification before writing interface code.
   - Build intake/progress and the three-pane single-post project page.
-  - Add transcript-frame evidence inspection and finding review.
+  - Add finding evidence inspection and review.
   - Verify responsive behavior and accessibility.
   - _Requirements: R6, R9, R11_
+
+- [ ] 9a. Implement transcript-frame evidence inspection
+  - Render transcript cues with their representative frame and all overlapping shot IDs after the media evidence pipeline exists.
+  - Keep the unavailable evidence boundary visible until real media evidence has been produced.
+  - _Requirements: R4, R6, R11_
 
 - [ ] 10. Add cohort and creator foundations
   - Add project sample management, cohort rules, creator pagination checkpoints, and placeholder views driven by real schemas.
