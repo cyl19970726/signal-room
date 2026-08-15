@@ -53,4 +53,56 @@ describe('run terminal-state polling', () => {
         'Hand the configured task space to the user, then resume.',
     });
   });
+
+  it('does not declare JSON for the bodyless Run POST', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (_input, init) => {
+        const headers = new Headers(init?.headers);
+        if (headers.has('content-type') && init?.body === undefined) {
+          return new Response(
+            JSON.stringify({
+              error: 'FST_ERR_CTP_EMPTY_JSON_BODY',
+              message: 'Body cannot be empty when content-type is JSON.',
+            }),
+            {
+              status: 500,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
+        }
+        return jsonResponse(run('queued'));
+      });
+
+    await expect(api.startRun('project-1')).resolves.toMatchObject({
+      status: 'queued',
+    });
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init?.body).toBeUndefined();
+    expect(new Headers(init?.headers).has('content-type')).toBe(false);
+  });
+
+  it('sets JSON content type only for requests that carry a body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      jsonResponse({
+        contentId: 'content-1',
+        canonicalUrl: 'https://www.xiaohongshu.com/explore/synthetic',
+        externalId: 'synthetic',
+        creatorName: 'Synthetic creator',
+        title: 'Synthetic post',
+        bodyExcerpt: '',
+        contentType: 'video',
+        metrics: {},
+        warnings: [],
+        evidenceCoverage: [],
+      }),
+    );
+
+    await api.resolve('https://xhslink.cn/o/synthetic');
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init?.body).toBeTypeOf('string');
+    expect(new Headers(init?.headers).get('content-type')).toBe(
+      'application/json',
+    );
+  });
 });

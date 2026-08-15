@@ -73,9 +73,13 @@ const terminalRunStatuses = new Set<RunStatus>([
 ]);
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  if (options?.body != null && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
   const response = await fetch(url, {
     ...options,
-    headers: { 'content-type': 'application/json', ...options?.headers },
+    headers,
   });
   const payload = (await response.json()) as T & {
     message?: string;
