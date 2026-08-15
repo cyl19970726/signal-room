@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "paths": {
+      "@signal-room/artifacts": ["packages/artifacts/src/index.ts"],
+      "@signal-room/browser-ego": ["packages/browser-ego/src/index.ts"],
+      "@signal-room/domain": ["packages/domain/src/index.ts"],
+      "@signal-room/platform-xhs": ["packages/platform-xhs/src/index.ts"],
+      "@signal-room/research-single": ["packages/research-single/src/index.ts"],
+      "@signal-room/storage": ["packages/storage/src/index.ts"]
+    }
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts"]
+}

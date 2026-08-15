@@ -9,7 +9,7 @@
 
 ## R2 — ego-browser session contract
 
-- When authenticated collection is required, Signal Room shall use an explicitly configured ego-browser task space such as local alias `hhh-01`.
+- When authenticated collection is required, Signal Room shall use an explicitly configured local ego-browser profile and task space.
 - When the browser reports user control, login challenge, captcha, risk control, or access denial, Signal Room shall stop and request user action.
 - When collection resumes, Signal Room shall continue from a persisted checkpoint without duplicating content entities.
 

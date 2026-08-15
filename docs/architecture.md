@@ -163,7 +163,7 @@ GET    /api/projects/:id
 PATCH  /api/projects/:id
 POST   /api/projects/:id/samples
 POST   /api/projects/:id/runs
-GET    /api/runs/:id/events
+GET    /api/runs/:id
 GET    /api/content/:id
 GET    /api/content/:id/evidence
 GET    /api/creators/:id
@@ -181,7 +181,7 @@ POST   /api/published-content/:id/reviews
 `content-intelligence` is a thin router over stable CLI/API operations:
 
 ```text
-signal-room ingest <input> --browser-space hhh-01
+signal-room ingest <input> --browser-space <local-task-space>
 signal-room project create --type single_post|series_topic|creator
 signal-room analyze --project <id>
 signal-room breakdown --content <id>

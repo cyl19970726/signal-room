@@ -4,7 +4,7 @@
 
 Authenticated Xiaohongshu collection is browser-first. The adapter uses ego-browser task spaces to reuse the user's legitimate login state while keeping agent tabs isolated. Generic web search and unauthenticated HTTP are supplementary discovery paths only.
 
-The default local profile/task-space alias may be configured as `hhh-01`, but the value is user configuration and is never committed.
+The local profile and task-space aliases are required user configuration and are never committed.
 
 ## 2. Capabilities to use fully
 
