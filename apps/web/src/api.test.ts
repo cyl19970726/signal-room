@@ -9,6 +9,10 @@ function run(status: RunStatus, recoveryAction: string | null = null): RunView {
     checkpoint: { stage: status },
     failedStage: status === 'complete' ? null : 'research',
     recoveryAction,
+    jobs: [],
+    recoverable: ['interrupted', 'partial', 'blocked', 'failed'].includes(
+      status,
+    ),
   };
 }
 
@@ -78,6 +82,21 @@ describe('run terminal-state polling', () => {
       status: 'queued',
     });
     const [, init] = fetchMock.mock.calls[0]!;
+    expect(init?.body).toBeUndefined();
+    expect(new Headers(init?.headers).has('content-type')).toBe(false);
+  });
+
+  it('resumes a persisted Run with a bodyless POST', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(run('queued')));
+
+    await expect(api.resumeRun('run-1')).resolves.toMatchObject({
+      status: 'queued',
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('/api/runs/run-1/resume');
+    expect(init?.method).toBe('POST');
     expect(init?.body).toBeUndefined();
     expect(new Headers(init?.headers).has('content-type')).toBe(false);
   });

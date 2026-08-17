@@ -57,8 +57,8 @@ Platform code may produce facts and evidence; it may not produce unlabeled strat
 ### Local API
 
 - TypeScript service using versioned Zod contracts.
-- REST in MVP; background jobs expose status and checkpoint state.
-- Server-Sent Events for progress updates.
+- REST in MVP; persisted jobs expose status and checkpoint state through bounded polling.
+- Explicit resume is required after process interruption or a hard stop.
 - Endpoints are project-oriented; Run diagnostics are nested.
 
 ### SQLite
@@ -78,6 +78,10 @@ Platform code may produce facts and evidence; it may not produce unlabeled strat
 ### Worker/orchestrator
 
 - Durable job table rather than an in-memory queue.
+- The current single-post path persists ordered `prepare`, `research`, and
+  `finalize` jobs before scheduling any callback.
+- Service startup marks pre-existing active Runs interrupted and schedules
+  nothing; the user must explicitly resume from the last committed stage.
 - Stages: resolve, collect profile/post, collect metrics/comments, acquire media, transcribe, segment, analyze, index, export.
 - Each stage is idempotent and checkpointed.
 - Partial success remains inspectable.
@@ -164,6 +168,7 @@ PATCH  /api/projects/:id
 POST   /api/projects/:id/samples
 POST   /api/projects/:id/runs
 GET    /api/runs/:id
+POST   /api/runs/:id/resume
 GET    /api/content/:id
 GET    /api/content/:id/evidence
 GET    /api/creators/:id
@@ -204,6 +209,10 @@ The Skill owns workflow discipline and validation. It does not contain platform 
 ## 11. Reliability
 
 - Every stage has an input fingerprint and idempotency key.
+- Stage attempts, leases, heartbeats, checkpoints, error categories, and
+  recovery actions are persisted in SQLite.
+- Duplicate start and resume requests are safe: SQLite is authoritative for
+  claims and findings are unique per Run and dimension.
 - Re-running collection appends snapshots rather than overwriting history.
 - Browser task-space ownership is explicit.
 - Interrupted creator pagination resumes from a persisted cursor.

@@ -353,11 +353,19 @@ textarea::placeholder {
   margin-top: 18px;
   padding: 16px 18px;
   display: grid;
-  grid-template-columns: minmax(190px, 0.4fr) 1fr;
+  grid-template-columns: minmax(220px, 0.65fr) minmax(280px, 1fr);
   gap: 24px;
   border: 1px solid var(--caution);
   color: #705313;
   background: rgba(165, 124, 32, 0.08);
+}
+.run-outcome.interrupted {
+  border-left: 5px solid var(--caution);
+}
+.run-outcome.complete {
+  border-color: var(--evidence);
+  color: #195c47;
+  background: rgba(34, 121, 94, 0.07);
 }
 .run-outcome.failed {
   border-color: var(--signal);
@@ -371,10 +379,73 @@ textarea::placeholder {
     600 13px 'IBM Plex Mono',
     monospace;
 }
-.run-outcome p {
+.run-summary p {
   margin: 0;
   font-size: 12px;
   line-height: 1.65;
+}
+.run-summary > div {
+  margin-bottom: 12px;
+}
+.run-summary small {
+  display: block;
+  margin-top: 12px;
+  font:
+    10px/1.5 'IBM Plex Mono',
+    monospace;
+  color: rgba(17, 20, 24, 0.62);
+}
+.run-ledger {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid currentColor;
+}
+.run-ledger li {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(17, 20, 24, 0.16);
+}
+.run-ledger li > span,
+.run-ledger small {
+  font:
+    9px/1.45 'IBM Plex Mono',
+    monospace;
+}
+.run-ledger li > span,
+.run-ledger small {
+  opacity: 0.62;
+}
+.run-ledger li strong {
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+.run-ledger li.complete strong {
+  color: var(--evidence);
+}
+.run-ledger li.running strong,
+.run-ledger li.interrupted strong,
+.run-ledger li.blocked strong,
+.run-ledger li.failed strong {
+  color: var(--signal);
+}
+.resume-action {
+  grid-column: 1 / -1;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border: 1px solid currentColor;
+  color: var(--paper);
+  background: var(--graphite);
+  cursor: pointer;
+}
+.resume-action:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 .verdict-band {
   margin-top: 18px;

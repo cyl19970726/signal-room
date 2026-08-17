@@ -55,6 +55,10 @@ The command performs read-only collection and reports contract coverage without 
 - [MVP requirements](specs/xhs-first-mvp/requirements.md)
 - [MVP technical design](specs/xhs-first-mvp/design.md)
 - [Implementation plan](specs/xhs-first-mvp/tasks.md)
+- [Durable Run recovery requirements](specs/run-recovery/requirements.md)
+- [Durable Run recovery design](specs/run-recovery/design.md)
+- [Durable Run recovery tasks](specs/run-recovery/tasks.md)
+- [Durable Run recovery validation](docs/validation/run-recovery.md)
 
 ## Reusable Skills
 
@@ -72,7 +76,11 @@ The first local vertical slice is implemented and has completed one authenticate
 
 `paste Xiaohongshu link → authenticated collection → evidence bundle → persistent research project/run → evidence-backed findings → traceable three-pane research desk`
 
-Media transcription/frame evidence, real browser handoff/resume validation, cohort analysis, and creator analysis remain open milestones. See the [implementation tasks](specs/xhs-first-mvp/tasks.md) and [redacted validation record](docs/validation/xhs-single-post.md).
+Runs now use a persisted stage ledger and explicit resume after interruption or
+hard stops. Media transcription/frame evidence, real browser handoff validation,
+cohort analysis, and creator analysis remain open milestones. See the
+[implementation tasks](specs/xhs-first-mvp/tasks.md) and
+[redacted validation record](docs/validation/xhs-single-post.md).
 
 ## License
 

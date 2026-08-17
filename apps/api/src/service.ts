@@ -7,9 +7,14 @@ import {
 import {
   analysisRunSchema,
   findingRevisionSchema,
+  runJobSchema,
   type AnalysisRun,
   type CollectedPost,
+  type ContentItem,
+  type EvidenceItem,
+  type MetricSnapshot,
   type ResearchProject,
+  type RunJob,
 } from '@signal-room/domain';
 import { XhsPostCollector } from '@signal-room/platform-xhs';
 import {
@@ -17,13 +22,26 @@ import {
   type SinglePostResearchInput,
 } from '@signal-room/research-single';
 import type { SignalRoomDatabase } from '@signal-room/storage';
+import { z } from 'zod';
 
 export interface SignalRoomServiceOptions {
   scheduleRun?: (execute: () => void) => void;
   research?: (
     input: SinglePostResearchInput,
   ) => ReturnType<typeof researchSinglePost>;
+  now?: () => string;
+  workerId?: string;
+  leaseMs?: number;
 }
+
+const preparedCheckpointSchema = z.object({
+  contentId: z.uuid(),
+  sourceTextEvidenceId: z.uuid(),
+  metricEvidenceId: z.uuid(),
+  metricSnapshotId: z.uuid(),
+});
+
+const runStages = ['prepare', 'research', 'finalize'] as const;
 
 export interface IntakePreview {
   contentId: string;
@@ -44,6 +62,9 @@ export class SignalRoomService {
   private readonly research: (
     input: SinglePostResearchInput,
   ) => ReturnType<typeof researchSinglePost>;
+  private readonly now: () => string;
+  private readonly workerId: string;
+  private readonly leaseMs: number;
 
   constructor(
     private readonly database: SignalRoomDatabase,
@@ -54,6 +75,10 @@ export class SignalRoomService {
     this.collector = new XhsPostCollector(browser);
     this.scheduleRun = options.scheduleRun ?? queueMicrotask;
     this.research = options.research ?? researchSinglePost;
+    this.now = options.now ?? (() => new Date().toISOString());
+    this.workerId = options.workerId ?? randomUUID();
+    this.leaseMs = options.leaseMs ?? 30_000;
+    this.database.reconcileActiveRuns(this.now());
   }
 
   inspectInput(input: string) {
@@ -214,10 +239,16 @@ export class SignalRoomService {
     return project;
   }
 
-  startRun(projectId: string): AnalysisRun {
+  startRun(projectId: string) {
     const subject = this.database.getProjectSubject(projectId);
     if (!subject)
       throw new IntakeError('project_not_found', '研究项目或 subject 不存在。');
+    const now = this.now();
+    const inputFingerprint = createHash('sha256')
+      .update(
+        `${projectId}:${subject.externalId}:${subject.latestSourceArtifactRef}`,
+      )
+      .digest('hex');
     const run = analysisRunSchema.parse({
       id: randomUUID(),
       projectId,
@@ -225,125 +256,201 @@ export class SignalRoomService {
       status: 'queued',
       schemaVersion: 1,
       modelVersion: 'deterministic-contract-v1',
-      inputFingerprint: createHash('sha256')
-        .update(
-          `${projectId}:${subject.externalId}:${subject.latestSourceArtifactRef}`,
-        )
-        .digest('hex'),
+      inputFingerprint,
       startedAt: null,
       finishedAt: null,
       checkpoint: {
-        stage: 'queued',
-        events: [{ stage: 'queued', status: 'complete' }],
+        stage: 'prepare',
+        events: [],
       },
       reportArtifactRef: null,
       failedStage: null,
       recoveryAction: null,
     });
-    this.database.insertRun(run);
-    this.scheduleRun(() => this.executeResearchRun(run.id));
-    return run;
+    const jobs = runStages.map((stage, sequence) =>
+      runJobSchema.parse({
+        id: randomUUID(),
+        runId: run.id,
+        stage,
+        sequence,
+        status: 'pending',
+        inputFingerprint: createHash('sha256')
+          .update(`${inputFingerprint}:${stage}:durable-v1`)
+          .digest('hex'),
+        attempt: 0,
+        checkpoint:
+          stage === 'prepare'
+            ? {
+                contentId: subject.id,
+                sourceArtifactRef: subject.latestSourceArtifactRef,
+              }
+            : {},
+        errorCategory: null,
+        leaseOwner: null,
+        leaseAcquiredAt: null,
+        leaseExpiresAt: null,
+        heartbeatAt: null,
+        startedAt: null,
+        finishedAt: null,
+        recoveryAction: null,
+        updatedAt: now,
+      }),
+    );
+    const created = this.database.createRunWithJobs(run, jobs);
+    if (created.created) this.scheduleNextStage(created.run.id);
+    return this.database.getRunView(created.run.id)!;
   }
 
-  private executeResearchRun(runId: string): void {
-    const run = this.database.getRun(runId);
-    if (!run) return;
-    const startedAt = new Date().toISOString();
-    const running: AnalysisRun = {
-      ...run,
-      status: 'running',
-      startedAt,
-      checkpoint: {
-        stage: 'research',
-        events: [
-          { stage: 'queued', status: 'complete' },
-          { stage: 'persisted_source', status: 'complete' },
-          { stage: 'research', status: 'running' },
-        ],
-      },
-    };
-    this.database.updateRun(running);
-    this.database.updateProjectStatus(run.projectId, 'analyzing');
+  resumeRun(runId: string) {
+    const resumed = this.database.prepareRunForResume(runId, this.now());
+    if (!resumed) return null;
+    if (resumed.shouldSchedule) this.scheduleNextStage(runId);
+    return this.database.getRunView(runId)!;
+  }
+
+  private scheduleNextStage(runId: string): void {
+    this.scheduleRun(() => this.executeNextStage(runId));
+  }
+
+  private executeNextStage(runId: string): void {
+    const claimedAt = this.now();
+    const job = this.database.claimNextJob(
+      runId,
+      this.workerId,
+      claimedAt,
+      new Date(new Date(claimedAt).getTime() + this.leaseMs).toISOString(),
+    );
+    if (!job) return;
     try {
-      const content = this.database.getProjectSubject(run.projectId);
-      if (!content) throw new Error('Persisted project subject is missing.');
-      const metric = this.database.getLatestMetric(content.id);
-      const evidence = this.database.getEvidenceForContent(content.id);
-      const sourceEvidence = evidence.find(
-        (item) => item.type === 'source_text',
-      );
-      const metricEvidence = evidence.find((item) => item.type === 'metric');
-      if (!sourceEvidence || !metricEvidence)
-        throw new Error('Required source evidence is missing.');
-      const post: CollectedPost = {
-        canonicalUrl: content.sourceUrl,
-        externalId: content.externalId,
-        creator: { externalId: null, name: '见来源证据', profileUrl: null },
-        contentType: content.contentType,
-        title: content.title,
-        body: content.body,
-        tags: content.tags,
-        publishedAt: content.publishedAt,
-        metrics: {
-          likes: metric?.likes ?? null,
-          comments: metric?.comments ?? null,
-          shares: metric?.shares ?? null,
-          bookmarks: metric?.bookmarks ?? null,
-          views: metric?.views ?? null,
-        },
-        rawSnapshot: '{}',
-        provenance: {
-          sourceUrl: content.sourceUrl,
-          externalId: content.externalId,
-          observedAt: metric?.observedAt ?? content.firstSeenAt,
-          extractionMethod: 'persisted-evidence',
-          locator: sourceEvidence.locator,
-          artifactRef: sourceEvidence.artifactRef,
-          checksum: sourceEvidence.checksum,
-          verificationState: 'verified',
-          warning: metric?.warnings.join(' ') || null,
-        },
-        warnings: metric?.warnings ?? [],
-      };
-      for (const finding of this.research({
-        projectId: run.projectId,
-        runId,
-        post,
-        sourceTextEvidenceId: sourceEvidence.id,
-        metricEvidenceId: metricEvidence.id,
-      })) {
-        this.database.insertFinding(finding);
+      switch (job.stage) {
+        case 'prepare':
+          this.executePrepare(job);
+          break;
+        case 'research':
+          this.executeResearch(job);
+          break;
+        case 'finalize':
+          this.database.completeRun(
+            job.id,
+            { completedStages: runStages },
+            this.now(),
+          );
+          return;
       }
-      this.database.updateRun({
-        ...running,
-        status: 'complete',
-        finishedAt: new Date().toISOString(),
-        checkpoint: {
-          stage: 'complete',
-          events: [
-            { stage: 'queued', status: 'complete' },
-            { stage: 'persisted_source', status: 'complete' },
-            { stage: 'research', status: 'complete' },
-          ],
-        },
-      });
-      this.database.updateProjectStatus(run.projectId, 'ready');
+      this.scheduleNextStage(runId);
     } catch (error) {
       const stop = error instanceof BrowserStopError ? error : null;
-      this.database.updateRun({
-        ...running,
-        status: stop ? 'blocked' : 'partial',
-        finishedAt: new Date().toISOString(),
-        failedStage: 'research',
+      const priorResearchComplete = this.database
+        .getJobs(runId)
+        .some((candidate) =>
+          candidate.stage === 'research'
+            ? candidate.status === 'complete'
+            : false,
+        );
+      this.database.failJobAndRun({
+        jobId: job.id,
+        jobStatus: stop ? 'blocked' : 'failed',
+        runStatus: stop
+          ? 'blocked'
+          : priorResearchComplete
+            ? 'partial'
+            : 'failed',
+        errorCategory: stop?.reason ?? 'stage_error',
         recoveryAction:
-          stop?.recoveryAction ?? '检查已持久化证据后重试研究阶段。',
-        checkpoint: {
-          stage: 'research',
-          events: [{ stage: 'research', status: stop ? 'blocked' : 'partial' }],
+          stop?.recoveryAction ??
+          `检查 ${job.stage} 阶段的持久 checkpoint 后显式恢复。`,
+        diagnostic: {
+          name: error instanceof Error ? error.name : 'UnknownError',
+          message: error instanceof Error ? error.message : 'Unknown failure',
         },
+        now: this.now(),
       });
-      this.database.updateProjectStatus(run.projectId, 'needs_data');
     }
+  }
+
+  private executePrepare(job: RunJob): void {
+    const run = this.requiredRun(job.runId);
+    const content = this.database.getProjectSubject(run.projectId);
+    if (!content) throw new Error('Persisted project subject is missing.');
+    const evidence = this.database.getEvidenceForContent(content.id);
+    const expectedArtifactRef =
+      typeof job.checkpoint.sourceArtifactRef === 'string'
+        ? job.checkpoint.sourceArtifactRef
+        : null;
+    const sourceEvidence = findEvidence(
+      evidence,
+      'source_text',
+      expectedArtifactRef,
+    );
+    const metricEvidence = findEvidence(
+      evidence,
+      'metric',
+      expectedArtifactRef,
+    );
+    const metricSnapshotId = metricEvidence?.payload.snapshotId;
+    if (
+      !sourceEvidence ||
+      !metricEvidence ||
+      typeof metricSnapshotId !== 'string' ||
+      !this.database.getMetric(metricSnapshotId)
+    ) {
+      throw new Error('Required persisted evidence is missing.');
+    }
+    this.database.completeJob(
+      job.id,
+      preparedCheckpointSchema.parse({
+        contentId: content.id,
+        sourceTextEvidenceId: sourceEvidence.id,
+        metricEvidenceId: metricEvidence.id,
+        metricSnapshotId,
+      }),
+      this.now(),
+    );
+  }
+
+  private executeResearch(job: RunJob): void {
+    const run = this.requiredRun(job.runId);
+    const prepare = this.database
+      .getJobs(job.runId)
+      .find((candidate) => candidate.stage === 'prepare');
+    if (!prepare || prepare.status !== 'complete') {
+      throw new Error('Prepare checkpoint is incomplete.');
+    }
+    const checkpoint = preparedCheckpointSchema.parse(prepare.checkpoint);
+    const content = this.database.getContent(checkpoint.contentId);
+    const sourceEvidence = this.database.getEvidence(
+      checkpoint.sourceTextEvidenceId,
+    );
+    const metricEvidence = this.database.getEvidence(
+      checkpoint.metricEvidenceId,
+    );
+    const metric = this.database.getMetric(checkpoint.metricSnapshotId);
+    if (!content || !sourceEvidence || !metricEvidence || !metric) {
+      throw new Error('Prepared evidence cannot be rehydrated.');
+    }
+    const post = rehydratePost(content, sourceEvidence, metric);
+    const findings = this.research({
+      projectId: run.projectId,
+      runId: run.id,
+      post,
+      sourceTextEvidenceId: sourceEvidence.id,
+      metricEvidenceId: metricEvidence.id,
+    });
+    this.database.persistFindingsAndCompleteJob(
+      job.id,
+      findings,
+      {
+        sourceTextEvidenceId: sourceEvidence.id,
+        metricEvidenceId: metricEvidence.id,
+      },
+      this.now(),
+    );
+  }
+
+  private requiredRun(runId: string): AnalysisRun {
+    const run = this.database.getRun(runId);
+    if (!run) throw new Error('Analysis Run does not exist.');
+    return run;
   }
 
   getProject(id: string) {
@@ -351,7 +458,7 @@ export class SignalRoomService {
   }
 
   getRun(id: string) {
-    return this.database.getRun(id);
+    return this.database.getRunView(id);
   }
 
   getEvidence(contentId: string) {
@@ -382,6 +489,63 @@ export class SignalRoomService {
     this.database.reviewFinding(revision);
     return revision;
   }
+}
+
+function findEvidence(
+  evidence: EvidenceItem[],
+  type: EvidenceItem['type'],
+  artifactRef: string | null,
+): EvidenceItem | undefined {
+  const typed = evidence.filter((item) => item.type === type);
+  return typed.find((item) => item.artifactRef === artifactRef) ?? typed.at(-1);
+}
+
+function rehydratePost(
+  content: ContentItem,
+  sourceEvidence: EvidenceItem,
+  metric: MetricSnapshot,
+): CollectedPost {
+  const title = stringPayload(sourceEvidence.payload.title) ?? content.title;
+  const body = stringPayload(sourceEvidence.payload.body) ?? content.body;
+  const tags = Array.isArray(sourceEvidence.payload.tags)
+    ? sourceEvidence.payload.tags.filter(
+        (tag): tag is string => typeof tag === 'string',
+      )
+    : content.tags;
+  return {
+    canonicalUrl: content.sourceUrl,
+    externalId: content.externalId,
+    creator: { externalId: null, name: '见来源证据', profileUrl: null },
+    contentType: content.contentType,
+    title,
+    body,
+    tags,
+    publishedAt: content.publishedAt,
+    metrics: {
+      likes: metric.likes,
+      comments: metric.comments,
+      shares: metric.shares,
+      bookmarks: metric.bookmarks,
+      views: metric.views,
+    },
+    rawSnapshot: '{}',
+    provenance: {
+      sourceUrl: content.sourceUrl,
+      externalId: content.externalId,
+      observedAt: metric.observedAt,
+      extractionMethod: 'persisted-evidence',
+      locator: sourceEvidence.locator,
+      artifactRef: sourceEvidence.artifactRef,
+      checksum: sourceEvidence.checksum,
+      verificationState: 'verified',
+      warning: metric.warnings.join(' ') || null,
+    },
+    warnings: metric.warnings,
+  };
+}
+
+function stringPayload(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
 }
 
 export class IntakeError extends Error {

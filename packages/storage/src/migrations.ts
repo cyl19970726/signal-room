@@ -150,4 +150,23 @@ export const migrations = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `
+      ALTER TABLE jobs ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE jobs ADD COLUMN error_category TEXT;
+      ALTER TABLE jobs ADD COLUMN lease_owner TEXT;
+      ALTER TABLE jobs ADD COLUMN lease_acquired_at TEXT;
+      ALTER TABLE jobs ADD COLUMN lease_expires_at TEXT;
+      ALTER TABLE jobs ADD COLUMN heartbeat_at TEXT;
+      ALTER TABLE jobs ADD COLUMN started_at TEXT;
+      ALTER TABLE jobs ADD COLUMN finished_at TEXT;
+      ALTER TABLE jobs ADD COLUMN recovery_action TEXT;
+      CREATE INDEX IF NOT EXISTS jobs_run_sequence_idx
+        ON jobs(run_id, sequence);
+      CREATE UNIQUE INDEX IF NOT EXISTS findings_run_dimension_unique
+        ON findings(source_run_id, dimension);
+    `,
+  },
 ] as const;

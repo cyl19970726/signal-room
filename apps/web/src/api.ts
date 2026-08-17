@@ -34,7 +34,32 @@ export interface FindingView {
 }
 
 export type RunStatus =
-  'queued' | 'running' | 'complete' | 'partial' | 'blocked' | 'failed';
+  | 'queued'
+  | 'running'
+  | 'interrupted'
+  | 'complete'
+  | 'partial'
+  | 'blocked'
+  | 'failed';
+
+export interface RunJobView {
+  id: string;
+  stage: 'prepare' | 'research' | 'finalize';
+  sequence: number;
+  status:
+    'pending' | 'running' | 'complete' | 'blocked' | 'failed' | 'interrupted';
+  inputFingerprint: string;
+  attempt: number;
+  checkpoint: Record<string, unknown>;
+  errorCategory: string | null;
+  leaseAcquiredAt: string | null;
+  leaseExpiresAt: string | null;
+  heartbeatAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  recoveryAction: string | null;
+  updatedAt: string;
+}
 
 export interface RunView {
   id: string;
@@ -43,6 +68,8 @@ export interface RunView {
   checkpoint: Record<string, unknown>;
   failedStage: string | null;
   recoveryAction: string | null;
+  jobs: RunJobView[];
+  recoverable: boolean;
 }
 
 export interface ProjectView {
@@ -67,6 +94,7 @@ export interface ProjectView {
 
 const terminalRunStatuses = new Set<RunStatus>([
   'complete',
+  'interrupted',
   'partial',
   'blocked',
   'failed',
@@ -118,6 +146,11 @@ export const api = {
   },
   getRun(runId: string) {
     return request<RunView>(`/api/runs/${runId}`);
+  },
+  resumeRun(runId: string) {
+    return request<RunView>(`/api/runs/${runId}/resume`, {
+      method: 'POST',
+    });
   },
   async waitForRun(
     runId: string,
