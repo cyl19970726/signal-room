@@ -56,6 +56,16 @@ The command performs read-only collection and reports contract coverage without 
 - [MVP technical design](specs/xhs-first-mvp/design.md)
 - [Implementation plan](specs/xhs-first-mvp/tasks.md)
 
+## Reusable Skills
+
+The repository includes three evidence-first Skills under `skills/`:
+
+- [`analyze-creator-videos`](skills/analyze-creator-videos/SKILL.md): creator corpus collection, baseline analysis, tier selection, cross-tier comparison, and the creator research dashboard.
+- [`video-content-reconstruction`](skills/video-content-reconstruction/SKILL.md): a probe-first, category-free protocol for reconstructing transcripts, visual states, OCR, procedures, arguments, relationships, omissions, and unknowns.
+- [`deep-content-director`](skills/deep-content-director/SKILL.md): turns audited research into executable topics, scripts, shot plans, production handoffs, experiments, and publishing reviews.
+
+Only methods, schemas, scripts, synthetic fixtures, and tests are published. Real creator media, transcripts, authenticated URLs, browser state, and private research artifacts remain outside the public repository.
+
 ## Status
 
 The first local vertical slice is implemented and has completed one authenticated, read-only Xiaohongshu validation:
